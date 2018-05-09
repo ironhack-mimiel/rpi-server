@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const rpiId = 1;
+
 const bodyParser   = require('body-parser');
 const cookieParser = require('cookie-parser');
 const express      = require('express');
@@ -9,7 +11,17 @@ const mongoose     = require('mongoose');
 const logger       = require('morgan');
 const path         = require('path');
 
+const router = require('./routes/index');
+const request = require('request');
+const needle = require('needle');
+
+const schedule = require('node-schedule');
+const five = require("johnny-five");
+const SensorCanon = require('sensor-canon');
+
 const dbURL = process.env.DBURL;
+const board = new five.Board();
+const scheduleConfig = '1 * * * *'; // Run job every 5 min
 
 
 mongoose.Promise = Promise;
@@ -57,5 +69,40 @@ app.locals.title = 'Express - Generated with IronGenerator';
 const index = require('./routes/index');
 app.use('/', index);
 
+
+
+board.on("ready", () => {
+  const thermometer = new five.Thermometer({
+    id: 'thermometer',
+    controller: "TMP36",
+    pin: 'A0',
+    valueAs: 'celsius',
+  })
+
+  let temp1 = 0; 
+  let temp2 = 0;
+  let temp3 = 0;
+ 
+  thermometer.on("data", function(){
+    temp1 = this.celsius;
+  });
+
+   setInterval( (function (){
+	let date = new Date();
+	let data = 
+		{	
+			rpiId,
+			temp1,
+			temp2,
+			temp3,
+			date
+		};
+
+	needle('post','http://localhost:3000/addTemp', data)
+		//.then( (res) => console.log(res))
+		//.catch( err => console.log(err))
+   }).bind(this), 1000);
+  
+});
 
 module.exports = app;
