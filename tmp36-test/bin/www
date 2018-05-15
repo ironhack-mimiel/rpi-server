@@ -1,6 +1,11 @@
 const http = require('http');
+const io = require('socket.io')(http);
+const fs = require('fs');
+const path = require('path');
+const app = require('../app');
 
-let app = require('../app');
+var spawn = require('child_process').spawn;
+var proc;
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {
@@ -18,6 +23,30 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500);
   res.render('error');
 }); // Express middleware to handle errors
+
+var sockets = {};
+ 
+io.on('connection', function(socket) {
+ 
+  sockets[socket.id] = socket;
+  console.log("Total clients connected : ", Object.keys(sockets).length);
+ 
+  socket.on('disconnect', function() {
+    delete sockets[socket.id];
+ 
+    // no more sockets, kill the stream
+    if (Object.keys(sockets).length == 0) {
+      app.set('watchingFile', false);
+      if (proc) proc.kill();
+      fs.unwatchFile('./stream/image_stream.jpg');
+    }
+  });
+ 
+  socket.on('start-stream', function() {
+    startStreaming(io);
+  });
+ 
+});
 
 let server = http.createServer(app);
 
@@ -42,3 +71,31 @@ server.on('error', error => {
 server.listen(process.env.PORT, () => {
   console.log(`Listening on http://localhost:${process.env.PORT}`);
 });
+
+function stopStreaming() {
+  if (Object.keys(sockets).length == 0) {
+    app.set('watchingFile', false);
+    if (proc) proc.kill();
+    fs.unwatchFile('./stream/image_stream.jpg');
+  }
+}
+ 
+function startStreaming(io) {
+ 
+  if (app.get('watchingFile')) {
+    io.sockets.emit('liveStream', 'image_stream.jpg?_t=' + (Math.random() * 100000));
+    return;
+  }
+ 
+  var args = ["-w", "640", "-h", "480", "-o", "./stream/image_stream.jpg", "-t", "999999999", "-tl", "100"];
+  proc = spawn('raspistill', args);
+ 
+  console.log('Watching for changes...');
+ 
+  app.set('watchingFile', true);
+ 
+  fs.watchFile('./stream/image_stream.jpg', function(current, previous) {
+    io.sockets.emit('liveStream', 'image_stream.jpg?_t=' + (Math.random() * 100000));
+  })
+ 
+}
