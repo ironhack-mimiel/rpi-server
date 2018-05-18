@@ -101,8 +101,7 @@ board.on("ready", () => {
 	needle('post','http://localhost:3000/addTemp', data)
 		//.then( (res) => console.log(res))
 		//.catch( err => console.log(err))
-   }).bind(this), 1000);
-  
+   }).bind(this),20000);
 });
 
 module.exports = app;
